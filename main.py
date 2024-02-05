@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 import sympy
 import cvxpy as cp
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+from matplotlib.collections import PolyCollection
+
 import sys
 
 
@@ -86,17 +88,26 @@ def vis_solution(ax, xy, z, x_t, z_t, delta, transpose=False):
 
 
 def vis_solution_2d(ax, xy, z, x_t, z_t, delta):
-    facecolors = "cyan"
+    from scipy.spatial import ConvexHull
+
     x, y = xy[0, :], xy[1, :]
     points = np.array([[[x[i], y[j], z[i][j]] for j in range(4)] for i in range(4)])
     projected_x = points[:, :, 0] - x_t
+    projected_y = points[:, :, 1] # not really part of the projection to xz, but kept around.
     projected_z = points[:, :, 2] - delta * points[:, :, 1] - z_t
-    projected_y = np.array(4 * [np.linspace(0, 1, 4)])
-    # print(projected_x.shape, projected_y.shape, projected_z.shape) ; exit()
     projected = np.stack([projected_x, projected_y, projected_z], axis=-1)
-    for j in range(4):
+    colors = ['red', 'blue', 'green', 'yellow']
+    for j, color in enumerate(colors):
         xyz_j = projected[:, j, :]
-        ax.add_collection3d(Poly3DCollection([xyz_j], facecolors=facecolors, linewidths=1, edgecolors='b', alpha=.25))
+        xz_j = xyz_j[:, [0, 2]]
+        points = xz_j
+        hull = ConvexHull(points)
+        ax.fill(points[hull.vertices, 0], points[hull.vertices, 1], 'darkblue', alpha=0.3)  # Fill the convex hull with a transparent color
+        # ax.add_collection3d(Poly3DCollection([xyz_j], facecolors=color, linewidths=1, edgecolors='b', alpha=.25))
+        # ax.add_collection(PolyCollection([xz_j], facecolors=color, linewidths=1, edgecolors='b', alpha=.25))
+
+    plt.axhline(0, color='black')
+    plt.axvline(0, color='black')
 
 
 
@@ -122,12 +133,16 @@ vis_solution(ax, xy_trans, z_trans, x_t_2, z_t_2, delta_2, transpose=True)
 plt.show()
 
 fig = plt.figure()
-ax = fig.add_subplot(111, projection='3d')
+# ax = fig.add_subplot(111, projection='3d')
+ax = fig.add_subplot(111)
 vis_solution_2d(ax, xy, z, x_t, z_t, delta)
+plt.xlim(-1, 1) ; plt.ylim(-1, 1)
 plt.show()
 
 
 fig = plt.figure()
-ax = fig.add_subplot(111, projection='3d')
+# ax = fig.add_subplot(111, projection='3d')
+ax = fig.add_subplot(111)
 vis_solution_2d(ax, xy_trans, z_trans, x_t_2, z_t_2, delta_2)
+plt.xlim(-1, 1) ; plt.ylim(-1, 1)
 plt.show()
