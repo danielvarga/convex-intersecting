@@ -1,10 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import sympy
 import cvxpy as cp
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from matplotlib.collections import PolyCollection
-
+from scipy.spatial import ConvexHull
 import sys
 
 
@@ -27,23 +26,6 @@ def create_config():
     return xy, z
 
 
-def create_counterexample():
-    r = 1 / 3
-    x = np.array([0, r, 1 - r, 1])
-    y = x
-    xy = np.stack([x, y], axis=0)
-    z = np.ones((4, 4))
-
-    z = np.sin(0.9 * x[None, :] + 0.7 * y[:, None] + 0.5)
-
-    z[0, 0] = z[3, 3] = 0
-    z[0, 3] = z[3, 0] = 1
-
-    print(z)
-
-    return xy, z
-
-
 def create_lp(xy, z):
     x, y = xy[0, :], xy[1, :]
     barycentric = cp.Variable((4, 4), "barycentric")
@@ -53,7 +35,7 @@ def create_lp(xy, z):
     constraints = [barycentric >= 0]
     for j in range(4):
         y_j = y[j]
-        z_j = z[:, j] # TODO is z[j, :] more logical?
+        z_j = z[:, j]
         xz_j = np.stack([x, z_j], axis=-1)
         barycentric_j = barycentric[:, j]
         convex_comb_j = barycentric_j @ xz_j
@@ -71,7 +53,7 @@ def vis_solution(ax, xy, z, x_t, z_t, delta, transpose=False):
     facecolors = "blue" if transpose else "cyan"
     for j in range(4):
         y_j = y[j]
-        z_j = z[:, j] # TODO is z[j, :] more logical?
+        z_j = z[:, j]
         xz_j = np.stack([x, z_j], axis=-1)
         xyz_j = np.stack([x, y_j * np.ones(4), z_j], axis=-1)
         if transpose:
@@ -88,23 +70,20 @@ def vis_solution(ax, xy, z, x_t, z_t, delta, transpose=False):
 
 
 def vis_solution_2d(ax, xy, z, x_t, z_t, delta):
-    from scipy.spatial import ConvexHull
-
+    assert x_t is not None, "no solution, cannot visualize it"
     x, y = xy[0, :], xy[1, :]
     points = np.array([[[x[i], y[j], z[i][j]] for j in range(4)] for i in range(4)])
     projected_x = points[:, :, 0] - x_t
     projected_y = points[:, :, 1] # not really part of the projection to xz, but kept around.
     projected_z = points[:, :, 2] - delta * points[:, :, 1] - z_t
     projected = np.stack([projected_x, projected_y, projected_z], axis=-1)
-    colors = ['red', 'blue', 'green', 'yellow']
+    colors = ['red', 'green', 'blue', 'yellow']
     for j, color in enumerate(colors):
         xyz_j = projected[:, j, :]
         xz_j = xyz_j[:, [0, 2]]
         points = xz_j
         hull = ConvexHull(points)
-        ax.fill(points[hull.vertices, 0], points[hull.vertices, 1], 'darkblue', alpha=0.3)  # Fill the convex hull with a transparent color
-        # ax.add_collection3d(Poly3DCollection([xyz_j], facecolors=color, linewidths=1, edgecolors='b', alpha=.25))
-        # ax.add_collection(PolyCollection([xz_j], facecolors=color, linewidths=1, edgecolors='b', alpha=.25))
+        ax.fill(points[hull.vertices, 0], points[hull.vertices, 1], 'darkblue', edgecolor=color, alpha=0.3)  # Fill the convex hull with a transparent color
 
     plt.axhline(0, color='black')
     plt.axvline(0, color='black')
@@ -115,7 +94,6 @@ seed = int(sys.argv[1])
 np.random.seed(seed)
 
 xy, z = create_config()
-# xy, z = create_counterexample()
 
 x_t, z_t, delta = create_lp(xy, z)
 print("x_t", x_t, "z_t", z_t, "delta", delta)
@@ -131,6 +109,7 @@ x_t_2, z_t_2, delta_2 = create_lp(xy_trans, z_trans)
 vis_solution(ax, xy_trans, z_trans, x_t_2, z_t_2, delta_2, transpose=True)
 
 plt.show()
+
 
 if x_t is not None:
     fig = plt.figure()

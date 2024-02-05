@@ -1,6 +1,3 @@
-assert False, "this sympy code has not been updated after noticing the formulation issue"
-
-
 import numpy as np
 import matplotlib.pyplot as plt
 import sympy
@@ -30,14 +27,14 @@ delta, x_t, z_t = sympy.symbols('delta x_t z_t')
 alpha = [sympy.symbols(list(f'alpha_{i}{j}' for j in range(4))) for i in range(4)]
 alpha = np.array(alpha, dtype=object)
 
-projected_points_raw = [[(x[i] + delta * y[j], z[i][j]) for j in range(4)] for i in range(4)]
+projected_points_raw = [[(x[i], z[i][j] + delta * y[j]) for j in range(4)] for i in range(4)]
 projected_points_raw = np.array(projected_points_raw, dtype=object)
 
 
 def p(x,y):
     return np.array([x, y], dtype=object)
 
-projected_points = [[p(x[i] + delta * y[j] - x_t, z[i][j] - z_t) for j in range(4)] for i in range(4)]
+projected_points = [[p(x[i] - x_t, z[i][j] + delta * y[j] - z_t) for j in range(4)] for i in range(4)]
 projected_points = np.array(projected_points, dtype=object)
 log("projected_points", repr(projected_points))
 
