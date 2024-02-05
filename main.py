@@ -30,8 +30,8 @@ def create_lp(xy, z):
     x, y = xy[0, :], xy[1, :]
     barycentric = cp.Variable((4, 4), "barycentric")
     delta = cp.Variable()
-    x_t = cp.Variable()
-    z_t = cp.Variable()
+    x_t = cp.Variable(name="x_t")
+    z_t = cp.Variable(name="z_t")
     constraints = [barycentric >= 0]
     for j in range(4):
         y_j = y[j]

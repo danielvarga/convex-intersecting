@@ -24,11 +24,17 @@ log("points", points)
 
 # variables with an existential quantor:
 delta, x_t, z_t = sympy.symbols('delta x_t z_t')
-alpha = [sympy.symbols(list(f'alpha_{i}{j}' for j in range(4))) for i in range(4)]
+# TODO alpha_ij now corresponds to z_ij, but this is achieved in a super confusing, ad hoc way:
+alpha = [sympy.symbols(list(f'alpha_{j}{i}' for j in range(4))) for i in range(4)]
 alpha = np.array(alpha, dtype=object)
 
 projected_points_raw = [[(x[i], z[i][j] + delta * y[j]) for j in range(4)] for i in range(4)]
 projected_points_raw = np.array(projected_points_raw, dtype=object)
+projected_points_raw = np.transpose(projected_points_raw, (1, 0, 2))
+
+xz = [[[x[i], z[i][j]] for j in range(4)] for i in range(4)]
+xz = np.array(xz, dtype=object)
+xz = np.transpose(xz, (1, 0, 2))
 
 
 def p(x,y):
@@ -36,7 +42,8 @@ def p(x,y):
 
 projected_points = [[p(x[i] - x_t, z[i][j] + delta * y[j] - z_t) for j in range(4)] for i in range(4)]
 projected_points = np.array(projected_points, dtype=object)
-log("projected_points", repr(projected_points))
+projected_points = np.transpose(projected_points, (1, 0, 2))
+log("projected_points", projected_points.shape, repr(projected_points))
 
 
 alpha_positives = [alpha[i][j] for j in range(4) for i in range(4)]
@@ -45,11 +52,14 @@ log("alpha_eqs", alpha_eqs)
 
 convex_eqs = []
 for i in range(4):
-    prod = alpha[i, :, None] * projected_points_raw[i, :]
+    prod = alpha[i, :, None] * xz[i, :]
     comb = prod.sum(axis=0)
+    comb[1] -= delta * y[i]
     for k in range(2):
         expected_result = x_t if k == 0 else z_t
-        convex_eqs.append(comb[k] - expected_result)
+        convex_eq = comb[k] - expected_result
+        # convex_eq = convex_eq.subs(x[0], 0).subs(x[-1], 1).subs(y[0], 0).subs(y[-1], 1)
+        convex_eqs.append(convex_eq)
 
 for convex_eq in convex_eqs:
     log(convex_eq)
