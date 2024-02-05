@@ -19,7 +19,7 @@ def create_config():
     R = 2
     z = np.random.uniform(size=(4, 4), low=-R, high=R)
 
-    z = np.sin(x[None, :] + y[:, None])
+    # z = np.sin(x[None, :] + y[:, None])
 
     z[0, 0] = z[3, 3] = 0
     z[0, 3] = z[3, 0] = 1
@@ -43,8 +43,8 @@ def create_lp(xy, z):
         constraint_z = convex_comb_j[1] - delta * y_j == z_t
         constraints += [constraint_x, constraint_z, cp.sum(barycentric_j) == 1]
     lp = cp.Problem(cp.Minimize(0), constraints)
-    lp.solve(solver="ECOS")
-    # all none if infeasible
+    lp.solve(solver="GUROBI")
+    # all None if infeasible
     return x_t.value, z_t.value, delta.value
 
 
@@ -90,8 +90,59 @@ def vis_solution_2d(ax, xy, z, x_t, z_t, delta):
 
 
 
+def verify(xy, z):
+    x_t, z_t, delta = create_lp(xy, z)
+    x_good = x_t is not None
+    xy_trans = xy[::-1, :]
+    z_trans = z.T
+    x_t_2, z_t_2, delta_2 = create_lp(xy_trans, z_trans)
+    y_good = x_t_2 is not None
+    is_counterexample = not x_good and not y_good
+    if is_counterexample:
+        print("COUNTEREXAMPLE")
+        print(repr(xy), repr(z))
+    return int(x_good) + int(y_good)
+
+
+def update(xy, z):
+    xy = xy.copy()
+    z = z.copy()
+    xy += np.random.normal(size=xy.shape, scale=0.1)
+    xy = np.clip(xy, 0, 1)
+    z += np.random.normal(size=z.shape, scale=0.1)
+    return xy, z
+
+
 seed = int(sys.argv[1])
 np.random.seed(seed)
+
+
+direction_dict = {0: 0, 1: 0 , 2: 0}
+xy, z = create_config()
+
+stack = [(xy, z)]
+for i in range(10000):
+    directions = verify(xy, z)
+    direction_dict[directions] += 1
+    if directions == 1:
+        stack.append((xy, z))
+    if i % 100 == 0:
+        print(i, len(stack), direction_dict)
+    if i % 100 == 0:
+        xy, z = stack[np.random.randint(len(stack))]
+    xy, z = update(xy, z)
+
+exit()
+
+direction_dict = {0: 0, 1: 0 , 2: 0}
+for i in range(10000):
+    xy, z = create_config()
+    directions = verify(xy, z)
+    direction_dict[directions] += 1
+    if i % 100 == 0:
+        print(i, direction_dict)
+
+exit()
 
 xy1, z1 = create_config()
 xy2, z2 = create_config()
@@ -100,13 +151,6 @@ for i, lmbda in enumerate(np.linspace(-1, 1, 100)):
     xy = xy1 * lmbda + xy2 * (1 - lmbda)
     z = z1 * lmbda + z2 * (1 - lmbda)
 
-    x_t, z_t, delta = create_lp(xy, z)
-    x_good = x_t is not None
-
-    xy_trans = xy[::-1, :]
-    z_trans = z.T
-    x_t_2, z_t_2, delta_2 = create_lp(xy_trans, z_trans)
-    y_good = x_t_2 is not None
     print(lmbda, int(x_good), int(y_good))
     if not x_good and not y_good:
         assert False, "whoa, counterexample?"
