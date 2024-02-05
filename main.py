@@ -86,7 +86,17 @@ def vis_solution(ax, xy, z, x_t, z_t, delta, transpose=False):
 
 
 def vis_solution_2d(ax, xy, z, x_t, z_t, delta):
-    pass
+    facecolors = "cyan"
+    x, y = xy[0, :], xy[1, :]
+    points = np.array([[[x[i], y[j], z[i][j]] for j in range(4)] for i in range(4)])
+    projected_x = points[:, :, 0] - x_t
+    projected_z = points[:, :, 2] - delta * points[:, :, 1] - z_t
+    projected_y = np.array(4 * [np.linspace(0, 1, 4)])
+    # print(projected_x.shape, projected_y.shape, projected_z.shape) ; exit()
+    projected = np.stack([projected_x, projected_y, projected_z], axis=-1)
+    for j in range(4):
+        xyz_j = projected[:, j, :]
+        ax.add_collection3d(Poly3DCollection([xyz_j], facecolors=facecolors, linewidths=1, edgecolors='b', alpha=.25))
 
 
 
@@ -94,8 +104,7 @@ seed = int(sys.argv[1])
 np.random.seed(seed)
 
 xy, z = create_config()
-xy, z = create_counterexample()
-# xy, z = create_counterexample_2()
+# xy, z = create_counterexample()
 
 x_t, z_t, delta = create_lp(xy, z)
 print("x_t", x_t, "z_t", z_t, "delta", delta)
@@ -112,5 +121,13 @@ vis_solution(ax, xy_trans, z_trans, x_t_2, z_t_2, delta_2, transpose=True)
 
 plt.show()
 
+fig = plt.figure()
+ax = fig.add_subplot(111, projection='3d')
 vis_solution_2d(ax, xy, z, x_t, z_t, delta)
+plt.show()
+
+
+fig = plt.figure()
+ax = fig.add_subplot(111, projection='3d')
+vis_solution_2d(ax, xy_trans, z_trans, x_t_2, z_t_2, delta_2)
 plt.show()
