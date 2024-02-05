@@ -43,7 +43,7 @@ def create_lp(xy, z):
         constraint_z = convex_comb_j[1] - delta * y_j == z_t
         constraints += [constraint_x, constraint_z, cp.sum(barycentric_j) == 1]
     lp = cp.Problem(cp.Minimize(0), constraints)
-    lp.solve()
+    lp.solve(solver="ECOS")
     # all none if infeasible
     return x_t.value, z_t.value, delta.value
 
@@ -92,6 +92,28 @@ def vis_solution_2d(ax, xy, z, x_t, z_t, delta):
 
 seed = int(sys.argv[1])
 np.random.seed(seed)
+
+xy1, z1 = create_config()
+xy2, z2 = create_config()
+
+for i, lmbda in enumerate(np.linspace(-1, 1, 100)):
+    xy = xy1 * lmbda + xy2 * (1 - lmbda)
+    z = z1 * lmbda + z2 * (1 - lmbda)
+
+    x_t, z_t, delta = create_lp(xy, z)
+    x_good = x_t is not None
+
+    xy_trans = xy[::-1, :]
+    z_trans = z.T
+    x_t_2, z_t_2, delta_2 = create_lp(xy_trans, z_trans)
+    y_good = x_t_2 is not None
+    print(lmbda, int(x_good), int(y_good))
+    if not x_good and not y_good:
+        assert False, "whoa, counterexample?"
+
+exit()
+
+
 
 xy, z = create_config()
 
