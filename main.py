@@ -127,22 +127,21 @@ vis_solution(ax, xy, z, x_t, z_t, delta)
 
 xy_trans = xy[::-1, :]
 z_trans = z.T
-x_t_2, z_t_2, delta_2 = create_lp(xy, z)
+x_t_2, z_t_2, delta_2 = create_lp(xy_trans, z_trans)
 vis_solution(ax, xy_trans, z_trans, x_t_2, z_t_2, delta_2, transpose=True)
 
 plt.show()
 
-fig = plt.figure()
-# ax = fig.add_subplot(111, projection='3d')
-ax = fig.add_subplot(111)
-vis_solution_2d(ax, xy, z, x_t, z_t, delta)
-plt.xlim(-1, 1) ; plt.ylim(-1, 1)
-plt.show()
+if x_t is not None:
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    vis_solution_2d(ax, xy, z, x_t, z_t, delta)
+    plt.xlim(-1, 1) ; plt.ylim(-1, 1)
+    plt.show()
 
-
-fig = plt.figure()
-# ax = fig.add_subplot(111, projection='3d')
-ax = fig.add_subplot(111)
-vis_solution_2d(ax, xy_trans, z_trans, x_t_2, z_t_2, delta_2)
-plt.xlim(-1, 1) ; plt.ylim(-1, 1)
-plt.show()
+if x_t_2 is not None:
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    vis_solution_2d(ax, xy_trans, z_trans, x_t_2, z_t_2, delta_2)
+    plt.xlim(-1, 1) ; plt.ylim(-1, 1)
+    plt.show()
