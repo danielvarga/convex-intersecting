@@ -9,9 +9,9 @@ def log(*s):
 
 
 # variables with a universal quantor:
-x = sympy.symbols(list(f'x_{i}' for i in range(4)))
-y = sympy.symbols(list(f'y_{i}' for i in range(4)))
-z = [sympy.symbols(list(f'z_{i}{j}' for j in range(4))) for i in range(4)]
+x = sympy.symbols(list(f'x_{i+1}' for i in range(4)))
+y = sympy.symbols(list(f'y_{i+1}' for i in range(4)))
+z = [sympy.symbols(list(f'z_{i+1}{j+1}' for j in range(4))) for i in range(4)]
 
 all_vars = x + y + z
 eqs = [x[0] - 0, x[3] - 1, y[0] - 0, y[3] - 1]
@@ -24,26 +24,12 @@ log("points", points)
 
 # variables with an existential quantor:
 delta, x_t, z_t = sympy.symbols('delta x_t z_t')
-alpha = [sympy.symbols(list(f'alpha_{i}{j}' for j in range(4))) for i in range(4)]
+alpha = [sympy.symbols(list(f'alpha_{i+1}{j+1}' for j in range(4))) for i in range(4)]
 alpha = np.array(alpha, dtype=object)
-
-projected_points_raw = [[(x[i], z[i][j] + delta * y[j]) for j in range(4)] for i in range(4)]
-projected_points_raw = np.array(projected_points_raw, dtype=object)
-projected_points_raw = np.transpose(projected_points_raw, (1, 0, 2))
 
 xz = [[[x[i], z[i][j]] for j in range(4)] for i in range(4)]
 xz = np.array(xz, dtype=object)
 xz = np.transpose(xz, (1, 0, 2))
-
-
-def p(x,y):
-    return np.array([x, y], dtype=object)
-
-projected_points = [[p(x[i] - x_t, z[i][j] + delta * y[j] - z_t) for j in range(4)] for i in range(4)]
-projected_points = np.array(projected_points, dtype=object)
-projected_points = np.transpose(projected_points, (1, 0, 2))
-log("projected_points", projected_points.shape, repr(projected_points))
-
 
 alpha_positives = [alpha[i][j] for j in range(4) for i in range(4)]
 alpha_eqs = [sum(alpha[i][j] for i in range(4)) - 1 for j in range(4)]
@@ -66,13 +52,13 @@ for convex_eq in convex_eqs:
 print("""\\documentclass{article}
 \\begin{document}""")
 
-print("$\\forall x_0,\dots, x_3, y_0,\dots,y_3, z_{00},\dots,z_{33},$")
+print("$\\forall x_1,\dots, x_4, y_1,\dots,y_4, z_{11},\dots,z_{44},$")
 print()
 print("$" + ", ".join(sympy.latex(eq) + " = 0" for eq in eqs) + ",$")
 print("$" + ", ".join(sympy.latex(eq) + " \\geq 0" for eq in positives) + ":$")
 print()
 print("$\\exists \\delta, x_t, z_t$")
-print("$\\exists \\alpha_{00},\dots,\\alpha_{33}:$")
+print("$\\exists \\alpha_{11},\dots,\\alpha_{44}:$")
 print("$" + ", ".join(sympy.latex(eq) + " = 0" for eq in alpha_eqs) + ",$")
 print("$" + ", ".join(sympy.latex(eq) + " \\geq 0" for eq in alpha_positives) + ",$")
 print()
