@@ -42,10 +42,34 @@ def create_lp(xy, z):
         constraint_x = convex_comb_j[0] == x_t
         constraint_z = convex_comb_j[1] - delta * y_j == z_t
         constraints += [constraint_x, constraint_z, cp.sum(barycentric_j) == 1]
-    lp = cp.Problem(cp.Minimize(0), constraints)
+    lp = cp.Problem(cp.Maximize(cp.min(barycentric)), constraints)
     lp.solve(solver="GUROBI")
+    # print("minimal barycentric", lp.value)
+
+    if x_t.value is not None:
+        alpha = barycentric.value
+        delta = delta.value ; x_t = x_t.value ; z_t = z_t.value
+        alpha_z = z.T @ alpha
+        print(x @ alpha - x_t)
+        convex_comb_z = np.diag(alpha_z)
+        print(convex_comb_z - delta * y - z_t)
+        print(alpha.sum(axis=0) - 1)
+        exit()
+
     # all None if infeasible
     return x_t.value, z_t.value, delta.value
+
+
+def create_dual_lp(xy, z):
+    x, y = xy[0, :], xy[1, :]
+
+
+
+def verify_farkas_lemma():
+    for _ in range(1000):
+        xy, z = create_config()
+        x_t, z_t, delta = create_lp(xy, z)
+        _ = create_dual_lp(xy, z)
 
 
 def vis_solution(ax, xy, z, x_t, z_t, delta, transpose=False):
