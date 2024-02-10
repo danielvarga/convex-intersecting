@@ -46,30 +46,72 @@ def create_lp(xy, z):
     lp.solve(solver="GUROBI")
     # print("minimal barycentric", lp.value)
 
-    if x_t.value is not None:
+    delta = delta.value ; x_t = x_t.value ; z_t = z_t.value
+    if x_t is not None:
         alpha = barycentric.value
-        delta = delta.value ; x_t = x_t.value ; z_t = z_t.value
         alpha_z = z.T @ alpha
-        print(x @ alpha - x_t)
         convex_comb_z = np.diag(alpha_z)
-        print(convex_comb_z - delta * y - z_t)
-        print(alpha.sum(axis=0) - 1)
-        exit()
+        assert np.allclose(x @ alpha - x_t, 0)
+        assert np.allclose(convex_comb_z - delta * y - z_t, 0)
+        assert np.allclose(alpha.sum(axis=0) - 1, 0)
+
+        # in this format it's trivial to dualize the system:
+        big_A = np.zeros((12, 19))
+        for j in range(4):
+            big_A[j, j * 4: (j+1) * 4] = x
+            big_A[j, -2] = -1
+            big_A[j + 4, j * 4: (j+1) * 4] = z[:, j]
+            big_A[j + 4, -3] = - y[j]
+            big_A[j + 4, -1] = -1
+            big_A[j + 8, j * 4: (j+1) * 4] = 1
+        big_x = np.array(alpha.T.flatten().tolist() + [delta, x_t, z_t])
+        big_b = np.zeros(12)
+        big_b[-4:] = 1
+        assert np.allclose(big_A @ big_x - big_b, 0)
+
+        # that's just an awkward way to verify that alpha is nonnegative:
+        big_C = np.zeros((16, 19))
+        big_C[:16, :16] = - np.eye(16)
+        assert np.all(big_C @ big_x <= 0)
 
     # all None if infeasible
-    return x_t.value, z_t.value, delta.value
+    return x_t, z_t, delta
 
 
+# https://chat.openai.com/share/42a336d9-6853-4963-8bdc-239b55c84e24
 def create_dual_lp(xy, z):
     x, y = xy[0, :], xy[1, :]
-
+    big_A = np.zeros((12, 19))
+    for j in range(4):
+        big_A[j, j * 4: (j+1) * 4] = x
+        big_A[j, -2] = -1
+        big_A[j + 4, j * 4: (j+1) * 4] = z[:, j]
+        big_A[j + 4, -3] = - y[j]
+        big_A[j + 4, -1] = -1
+        big_A[j + 8, j * 4: (j+1) * 4] = 1
+    big_b = np.zeros(12)
+    big_b[-4:] = 1
+    big_C = np.zeros((16, 19))
+    big_C[:16, :16] = - np.eye(16)
+    big_u = cp.Variable(12, name="u")
+    big_v = cp.Variable(16, name="v")
+    constraints = [big_A.T @ big_u + big_C.T @ big_v == 0, big_v >=0]
+    lp = cp.Problem(cp.Minimize(big_b @ big_u), constraints)
+    lp.solve(solver="GUROBI")
+    return lp.value, big_u.value, big_v.value
 
 
 def verify_farkas_lemma():
     for _ in range(1000):
         xy, z = create_config()
         x_t, z_t, delta = create_lp(xy, z)
-        _ = create_dual_lp(xy, z)
+        dual_objective_value, big_u, big_v = create_dual_lp(xy, z)
+        primal_solvable = x_t is not None
+        dual_solvable = dual_objective_value is not None and not np.isclose(dual_objective_value, 0)
+        assert primal_solvable != dual_solvable, (primal_solvable, dual_solvable)
+
+
+verify_farkas_lemma() ; exit()
 
 
 def vis_solution(ax, xy, z, x_t, z_t, delta, transpose=False):
@@ -145,7 +187,7 @@ direction_dict = {0: 0, 1: 0 , 2: 0}
 xy, z = create_config()
 
 stack = [(xy, z)]
-for i in range(10000):
+for i in range(1000):
     directions = verify(xy, z)
     direction_dict[directions] += 1
     if directions == 1:
