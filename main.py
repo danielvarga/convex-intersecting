@@ -223,16 +223,23 @@ def dump_combined_dual():
     nonnegativity_constraints = constraints[0].tolist() + constraints[1].tolist()
     negativity_constraints = [ - constraints[2], - constraints[3] ]
     print("""\\documentclass{article}
-\\begin{document}""")
+\\usepackage[margin=1in]{geometry}
+\\begin{document}
+""")
 
-    print("\\noindent $\\exists x_2,\\dots, x_3, y_2,\dots,y_3, z_{11},\dots,z_{44},$")
+    print("$\\exists x_2, x_3, y_2, y_3, z_{11},\dots,z_{44},$")
     print("$\\exists u_1,\\dots, u_{12}, v_1,\dots,v_{12}:$")
     print()
-    print("\\noindent $0 < x_2 < x_3 < 1, 0 < y_2 < y_3 < 1,$ ", end="")
+    print("$0 \\geq x_2 \\geq x_3 \\geq 1,$")
+    print()
+    print("$0 \\geq y_2 \\geq y_3 \\geq 1,$")
+    print()
     for constraint in nonnegativity_constraints:
         print("$" + sympy.latex(subs_saddle(constraint, z)) + " \\geq 0,$")
+        print()
     for constraint in negativity_constraints:
         print("$" + sympy.latex(constraint) + " < 0,$")
+        print()
 
     print("\\end{document}")
 
