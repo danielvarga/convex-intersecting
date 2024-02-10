@@ -49,6 +49,7 @@ def create_lp(xy, z):
     delta = delta.value ; x_t = x_t.value ; z_t = z_t.value
     if x_t is not None:
         alpha = barycentric.value
+        print(alpha)
         alpha_z = z.T @ alpha
         convex_comb_z = np.diag(alpha_z)
         assert np.allclose(x @ alpha - x_t, 0)
@@ -79,18 +80,36 @@ def create_lp(xy, z):
 
 
 # https://chat.openai.com/share/42a336d9-6853-4963-8bdc-239b55c84e24
-def create_dual_lp(xy, z):
+# this is supposed to do the same as create_lp(xy, z),
+# but with all-nonnegative variables, and an easier to dualize format.
+def create_lp_matrix(xy, z):
     x, y = xy[0, :], xy[1, :]
-    big_A = np.zeros((12, 19))
+    big_A = np.zeros((12, 22))
+    # 22 = 16 alphas + 3 positive part + 3 negative part.
     for j in range(4):
         big_A[j, j * 4: (j+1) * 4] = x
-        big_A[j, -2] = -1
         big_A[j + 4, j * 4: (j+1) * 4] = z[:, j]
-        big_A[j + 4, -3] = - y[j]
-        big_A[j + 4, -1] = -1
+        big_A[j + 4, -3-3] = - y[j] # delta_p
+        big_A[j, -2-3] = -1 # x_t_p
+        big_A[j + 4, -1-3] = -1 # z_t_p
+        big_A[j + 4, -3] = y[j] # delta_m
+        big_A[j, -2] = 1 # x_t_m
+        big_A[j + 4, -1] = 1 # z_t_m
         big_A[j + 8, j * 4: (j+1) * 4] = 1
     big_b = np.zeros(12)
     big_b[-4:] = 1
+    big_x = cp.Variable(22, name="big_x")
+    constraints = [big_x >= 0, big_A @ big_x == big_b]
+    lp = cp.Problem(cp.Maximize(cp.min(big_x[:16])), constraints)
+    lp.solve(solver="GUROBI")
+    big_x_np = big_x.value
+    alphas = big_x_np[:16].reshape((4, 4)).T
+    delta = big_x_np[-3-3] - big_x_np[-3]
+    x_t = big_x_np[-2-3] - big_x_np[-2]
+    z_t = big_x_np[-1-3] - big_x_np[-1]
+    print(alphas)
+    return x_t, z_t, delta
+
     big_C = np.zeros((16, 19))
     big_C[:16, :16] = - np.eye(16)
     big_u = cp.Variable(12, name="u")
@@ -109,6 +128,17 @@ def verify_farkas_lemma():
         primal_solvable = x_t is not None
         dual_solvable = dual_objective_value is not None and not np.isclose(dual_objective_value, 0)
         assert primal_solvable != dual_solvable, (primal_solvable, dual_solvable)
+
+
+xy, z = create_config()
+x_t, z_t, delta = create_lp(xy, z)
+print(x_t, z_t, delta)
+print("========")
+x_t, z_t, delta = create_lp_matrix(xy, z)
+print(x_t, z_t, delta)
+
+exit()
+
 
 
 verify_farkas_lemma() ; exit()
