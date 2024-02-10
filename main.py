@@ -143,6 +143,27 @@ def verify_farkas_lemma():
         assert primal_solvable != dual_solvable, (primal_solvable, dual_solvable)
 
 
+# oops, i'm not sure how to finish this
+def create_combined_duals_lp_matrix(xy, z):
+    big_A, big_b = create_lp_matrix(xy, z)
+    xy_trans = xy[::-1, :]
+    z_trans = z.T
+    big_A_prime, big_b_prime = create_lp_matrix(xy_trans, z_trans)
+    big_y = cp.Variable(12, name="big_y")
+    big_y_prime = cp.Variable(12, name="big_y_prime")
+    slack = cp.Variable(name="slack")
+    constraints =  [big_A.T @ big_y >= 0,
+                    cp.norm(big_y, 1) <= 1,
+                    big_A_prime.T @ big_y_prime >= 0,
+                    cp.norm(big_y_prime, 1) <= 1,
+                    big_b @ big_y <= slack,
+                    big_b_prime @ big_y_prime <= slack
+    ]
+    lp = cp.Problem(cp.Minimize(slack), constraints)
+    lp.solve(solver="GUROBI")
+    return lp.value, big_y.value, big_y_prime.value
+
+
 def test_create_primal_lp_via_matrix():
     xy, z = create_config()
     x_t, z_t, delta = create_lp(xy, z)
@@ -152,7 +173,15 @@ def test_create_primal_lp_via_matrix():
     print(x_t, z_t, delta)
 
 
-verify_farkas_lemma() ; exit()
+# verify_farkas_lemma() ; exit()
+
+
+
+xy, z = create_config()
+slack, big_y, big_y_prime = create_combined_duals_lp_matrix(xy, z)
+print(slack)
+exit()
+
 
 
 def vis_solution(ax, xy, z, x_t, z_t, delta, transpose=False):
