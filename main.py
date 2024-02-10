@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import cvxpy as cp
+import sympy
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from matplotlib.collections import PolyCollection
 from scipy.spatial import ConvexHull
@@ -84,7 +85,7 @@ def create_lp(xy, z):
 # but with all-nonnegative variables, and an easier to dualize format.
 def create_lp_matrix(xy, z):
     x, y = xy[0, :], xy[1, :]
-    big_A = np.zeros((12, 22))
+    big_A = np.zeros((12, 22), dtype=z.dtype)
     # 22 = 16 alphas + 3 positive part + 3 negative part.
     for j in range(4):
         big_A[j, j * 4: (j+1) * 4] = x
@@ -96,15 +97,14 @@ def create_lp_matrix(xy, z):
         big_A[j, -2] = 1 # x_t_m
         big_A[j + 4, -1] = 1 # z_t_m
         big_A[j + 8, j * 4: (j+1) * 4] = 1
-    big_b = np.zeros(12)
+    big_b = np.zeros(12, dtype=z.dtype)
     big_b[-4:] = 1
 
+    return big_A, big_b
     # next three lines just documentation
     big_x = cp.Variable(22, name="big_x")
     constraints = [big_x >= 0, big_A @ big_x == big_b]
     lp = cp.Problem(cp.Maximize(cp.min(big_x[:16])), constraints)
-
-    return big_A, big_b
 
 
 # should be functionally completely identical to create_lp(xy, z)
@@ -143,7 +143,6 @@ def verify_farkas_lemma():
         assert primal_solvable != dual_solvable, (primal_solvable, dual_solvable)
 
 
-# oops, i'm not sure how to finish this
 def create_combined_duals_lp_matrix(xy, z):
     big_A, big_b = create_lp_matrix(xy, z)
     xy_trans = xy[::-1, :]
@@ -176,12 +175,71 @@ def test_create_primal_lp_via_matrix():
 # verify_farkas_lemma() ; exit()
 
 
+def search_counterexample_via_combined_duals():
+    for i in range(10000):
+        xy, z = create_config()
+        slack, big_y, big_y_prime = create_combined_duals_lp_matrix(xy, z)
+        if not np.isclose(slack, 0):
+            print("COUNTEREXAMPLE")
+            print(xy, z)
+            exit()
+        if i % 100 == 0:
+            print(i)
 
-xy, z = create_config()
-slack, big_y, big_y_prime = create_combined_duals_lp_matrix(xy, z)
-print(slack)
-exit()
 
+# search_counterexample_via_combined_duals() ; exit()
+
+
+def create_symbolic_combined_duals():
+    x2, x3 = sympy.symbols('x_2 x_3')
+    y2, y3 = sympy.symbols('y_2 y_3')
+    xy = np.array([[0, x2, x3, 1], [0, y2, y3, 1]], dtype=object)
+    z = np.array([[sympy.symbols(list(f'z_{i+1}{j+1}' for j in range(4)))] for i in range(4)], dtype=object)
+    z = z.squeeze()
+    big_A, big_b = create_lp_matrix(xy, z)
+    xy_trans = xy[::-1, :]
+    z_trans = z.T
+    big_A_prime, big_b_prime = create_lp_matrix(xy_trans, z_trans)
+
+    big_y = np.array(sympy.symbols(list(f'u_{k+1}' for k in range(big_A.shape[0]))), dtype=object)
+    big_y_prime = np.array(sympy.symbols(list(f'v_{k+1}' for k in range(big_A.shape[0]))), dtype=object)
+
+    # if (x,y,z) is a counterexample, then
+    # there exists (u,v) such that
+    # all 4 is nonnegative, and the last two are strictly positive:
+    constraints =  [big_A.T @ big_y,
+                    big_A_prime.T @ big_y_prime,
+                    - big_b @ big_y,
+                    - big_b_prime @ big_y_prime
+    ]
+    return constraints, z
+
+
+def subs_saddle(constraint, z):
+    return constraint.subs(z[0, 0], 0).subs(z[-1, -1], 0).subs(z[0, -1], 1).subs(z[-1, 0], 0)
+
+def dump_combined_dual():
+    constraints, z = create_symbolic_combined_duals()
+    nonnegativity_constraints = constraints[0].tolist() + constraints[1].tolist()
+    negativity_constraints = [ - constraints[2], - constraints[3] ]
+    print("""\\documentclass{article}
+\\begin{document}""")
+
+    print("\\noindent $\\exists x_2,\\dots, x_3, y_2,\dots,y_3, z_{11},\dots,z_{44},$")
+    print("$\\exists u_1,\\dots, u_{12}, v_1,\dots,v_{12}:$")
+    print()
+    print("\\noindent $0 < x_2 < x_3 < 1, 0 < y_2 < y_3 < 1,$ ", end="")
+    for constraint in nonnegativity_constraints:
+        print("$" + sympy.latex(subs_saddle(constraint, z)) + " \\geq 0,$")
+    for constraint in negativity_constraints:
+        print("$" + sympy.latex(constraint) + " < 0,$")
+
+    print("\\end{document}")
+
+
+dump_combined_dual() ; exit()
+
+create_symbolic_combined_duals() ; exit()
 
 
 def vis_solution(ax, xy, z, x_t, z_t, delta, transpose=False):
