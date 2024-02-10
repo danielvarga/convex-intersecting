@@ -98,47 +98,58 @@ def create_lp_matrix(xy, z):
         big_A[j + 8, j * 4: (j+1) * 4] = 1
     big_b = np.zeros(12)
     big_b[-4:] = 1
+
+    # next three lines just documentation
+    big_x = cp.Variable(22, name="big_x")
+    constraints = [big_x >= 0, big_A @ big_x == big_b]
+    lp = cp.Problem(cp.Maximize(cp.min(big_x[:16])), constraints)
+
+    return big_A, big_b
+
+
+# should be functionally completely identical to create_lp(xy, z)
+def create_primal_lp_via_matrix(xy, z):
+    big_A, big_b = create_lp_matrix(xy, z)
     big_x = cp.Variable(22, name="big_x")
     constraints = [big_x >= 0, big_A @ big_x == big_b]
     lp = cp.Problem(cp.Maximize(cp.min(big_x[:16])), constraints)
     lp.solve(solver="GUROBI")
     big_x_np = big_x.value
+    if big_x_np is None:
+        return None, None, None
     alphas = big_x_np[:16].reshape((4, 4)).T
     delta = big_x_np[-3-3] - big_x_np[-3]
     x_t = big_x_np[-2-3] - big_x_np[-2]
     z_t = big_x_np[-1-3] - big_x_np[-1]
-    print(alphas)
     return x_t, z_t, delta
 
-    big_C = np.zeros((16, 19))
-    big_C[:16, :16] = - np.eye(16)
-    big_u = cp.Variable(12, name="u")
-    big_v = cp.Variable(16, name="v")
-    constraints = [big_A.T @ big_u + big_C.T @ big_v == 0, big_v >=0]
-    lp = cp.Problem(cp.Minimize(big_b @ big_u), constraints)
+
+def create_dual_lp_via_matrix(xy, z):
+    big_A, big_b = create_lp_matrix(xy, z)
+    big_y = cp.Variable(12, name="big_y")
+    constraints = [big_A.T @ big_y >= 0, cp.norm(big_y, 1) <= 1]
+    lp = cp.Problem(cp.Minimize(big_b @ big_y), constraints)
     lp.solve(solver="GUROBI")
-    return lp.value, big_u.value, big_v.value
+    return lp.value, big_y.value
 
 
 def verify_farkas_lemma():
     for _ in range(1000):
         xy, z = create_config()
-        x_t, z_t, delta = create_lp(xy, z)
-        dual_objective_value, big_u, big_v = create_dual_lp(xy, z)
+        x_t, z_t, delta = create_primal_lp_via_matrix(xy, z)
+        dual_objective_value, big_y = create_dual_lp_via_matrix(xy, z)
         primal_solvable = x_t is not None
-        dual_solvable = dual_objective_value is not None and not np.isclose(dual_objective_value, 0)
+        dual_solvable = dual_objective_value is not None and dual_objective_value < 0 and not np.isclose(dual_objective_value, 0)
         assert primal_solvable != dual_solvable, (primal_solvable, dual_solvable)
 
 
-xy, z = create_config()
-x_t, z_t, delta = create_lp(xy, z)
-print(x_t, z_t, delta)
-print("========")
-x_t, z_t, delta = create_lp_matrix(xy, z)
-print(x_t, z_t, delta)
-
-exit()
-
+def test_create_primal_lp_via_matrix():
+    xy, z = create_config()
+    x_t, z_t, delta = create_lp(xy, z)
+    print(x_t, z_t, delta)
+    print("========")
+    x_t, z_t, delta = create_primal_lp_via_matrix(xy, z)
+    print(x_t, z_t, delta)
 
 
 verify_farkas_lemma() ; exit()
