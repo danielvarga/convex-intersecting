@@ -191,9 +191,11 @@ def search_counterexample_via_combined_duals():
 
 
 def create_symbolic_combined_duals():
-    x2, x3 = sympy.symbols('x_2 x_3')
-    y2, y3 = sympy.symbols('y_2 y_3')
-    xy = np.array([[0, x2, x3, 1], [0, y2, y3, 1]], dtype=object)
+    x = sympy.symbols(list(f'x_{i+1}' for i in range(4)))
+    y = sympy.symbols(list(f'y_{i+1}' for i in range(4)))
+    x[0] = y[0] = 0
+    x[3] = y[3] = 1
+    xy = np.array([x, y], dtype=object)
     z = np.array([[sympy.symbols(list(f'z_{i+1}{j+1}' for j in range(4)))] for i in range(4)], dtype=object)
     z = z.squeeze()
     big_A, big_b = create_lp_matrix(xy, z)
@@ -230,9 +232,9 @@ def dump_combined_dual():
     print("$\\exists x_2, x_3, y_2, y_3, z_{11},\dots,z_{44},$")
     print("$\\exists u_1,\\dots, u_{12}, v_1,\dots,v_{12}:$")
     print()
-    print("$0 \\geq x_2 \\geq x_3 \\geq 1,$")
+    print("$0 \\leq x_2 \\leq x_3 \\leq 1,$")
     print()
-    print("$0 \\geq y_2 \\geq y_3 \\geq 1,$")
+    print("$0 \\leq y_2 \\leq y_3 \\leq 1,$")
     print()
     for constraint in nonnegativity_constraints:
         print("$" + sympy.latex(subs_saddle(constraint, z)) + " \\geq 0,$")

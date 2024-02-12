@@ -1,29 +1,104 @@
 \documentclass{article}
+\usepackage[margin=1in]{geometry}
 \begin{document}
-$\forall x_1,\dots, x_4, y_1,\dots,y_4, z_{11},\dots,z_{44},$
 
-$x_{1} = 0, x_{4} - 1 = 0, y_{1} = 0, y_{4} - 1 = 0, z_{11} = 0, z_{44} = 0, z_{14} - 1 = 0, z_{41} - 1 = 0,$
-$x_{2} \geq 0, 1 - x_{3} \geq 0, - x_{2} + x_{3} \geq 0, y_{2} \geq 0, 1 - y_{3} \geq 0, - y_{2} + y_{3} \geq 0:$
+$\exists x_2, x_3, y_2, y_3, z_{11},\dots,z_{44},$
+$\exists u_1,\dots, u_{12}, v_1,\dots,v_{12}:$
 
-$\exists \delta, x_t, z_t$
-$\exists \alpha_{11},\dots,\alpha_{44}:$
-$\alpha_{11} + \alpha_{21} + \alpha_{31} + \alpha_{41} - 1 = 0, \alpha_{12} + \alpha_{22} + \alpha_{32} + \alpha_{42} - 1 = 0, \alpha_{13} + \alpha_{23} + \alpha_{33} + \alpha_{43} - 1 = 0, \alpha_{14} + \alpha_{24} + \alpha_{34} + \alpha_{44} - 1 = 0,$
-$\alpha_{11} \geq 0, \alpha_{21} \geq 0, \alpha_{31} \geq 0, \alpha_{41} \geq 0, \alpha_{12} \geq 0, \alpha_{22} \geq 0, \alpha_{32} \geq 0, \alpha_{42} \geq 0, \alpha_{13} \geq 0, \alpha_{23} \geq 0, \alpha_{33} \geq 0, \alpha_{43} \geq 0, \alpha_{14} \geq 0, \alpha_{24} \geq 0, \alpha_{34} \geq 0, \alpha_{44} \geq 0,$
+$0 \leq x_2 \leq x_3 \leq 1,$
 
-$\alpha_{11} x_{1} + \alpha_{21} x_{2} + \alpha_{31} x_{3} + \alpha_{41} x_{4} - x_{t} = 0,$
+$0 \leq y_2 \leq y_3 \leq 1,$
 
-$\alpha_{11} z_{11} + \alpha_{21} z_{21} + \alpha_{31} z_{31} + \alpha_{41} z_{41} - \delta y_{1} - z_{t} = 0,$
+$u_{9} \geq 0,$
 
-$\alpha_{12} x_{1} + \alpha_{22} x_{2} + \alpha_{32} x_{3} + \alpha_{42} x_{4} - x_{t} = 0,$
+$u_{1} x_{2} + u_{5} z_{21} + u_{9} \geq 0,$
 
-$\alpha_{12} z_{12} + \alpha_{22} z_{22} + \alpha_{32} z_{32} + \alpha_{42} z_{42} - \delta y_{2} - z_{t} = 0,$
+$u_{1} x_{3} + u_{5} z_{31} + u_{9} \geq 0,$
 
-$\alpha_{13} x_{1} + \alpha_{23} x_{2} + \alpha_{33} x_{3} + \alpha_{43} x_{4} - x_{t} = 0,$
+$u_{1} + u_{9} \geq 0,$
 
-$\alpha_{13} z_{13} + \alpha_{23} z_{23} + \alpha_{33} z_{33} + \alpha_{43} z_{43} - \delta y_{3} - z_{t} = 0,$
+$u_{10} + u_{6} z_{12} \geq 0,$
 
-$\alpha_{14} x_{1} + \alpha_{24} x_{2} + \alpha_{34} x_{3} + \alpha_{44} x_{4} - x_{t} = 0,$
+$u_{10} + u_{2} x_{2} + u_{6} z_{22} \geq 0,$
 
-$\alpha_{14} z_{14} + \alpha_{24} z_{24} + \alpha_{34} z_{34} + \alpha_{44} z_{44} - \delta y_{4} - z_{t} = 0,$
+$u_{10} + u_{2} x_{3} + u_{6} z_{32} \geq 0,$
+
+$u_{10} + u_{2} + u_{6} z_{42} \geq 0,$
+
+$u_{11} + u_{7} z_{13} \geq 0,$
+
+$u_{11} + u_{3} x_{2} + u_{7} z_{23} \geq 0,$
+
+$u_{11} + u_{3} x_{3} + u_{7} z_{33} \geq 0,$
+
+$u_{11} + u_{3} + u_{7} z_{43} \geq 0,$
+
+$u_{12} + u_{8} \geq 0,$
+
+$u_{12} + u_{4} x_{2} + u_{8} z_{24} \geq 0,$
+
+$u_{12} + u_{4} x_{3} + u_{8} z_{34} \geq 0,$
+
+$u_{12} + u_{4} \geq 0,$
+
+$- u_{6} y_{2} - u_{7} y_{3} - u_{8} \geq 0,$
+
+$- u_{1} - u_{2} - u_{3} - u_{4} \geq 0,$
+
+$- u_{5} - u_{6} - u_{7} - u_{8} \geq 0,$
+
+$u_{6} y_{2} + u_{7} y_{3} + u_{8} \geq 0,$
+
+$u_{1} + u_{2} + u_{3} + u_{4} \geq 0,$
+
+$u_{5} + u_{6} + u_{7} + u_{8} \geq 0,$
+
+$v_{9} \geq 0,$
+
+$v_{1} y_{2} + v_{5} z_{12} + v_{9} \geq 0,$
+
+$v_{1} y_{3} + v_{5} z_{13} + v_{9} \geq 0,$
+
+$v_{1} + v_{5} + v_{9} \geq 0,$
+
+$v_{10} + v_{6} z_{21} \geq 0,$
+
+$v_{10} + v_{2} y_{2} + v_{6} z_{22} \geq 0,$
+
+$v_{10} + v_{2} y_{3} + v_{6} z_{23} \geq 0,$
+
+$v_{10} + v_{2} + v_{6} z_{24} \geq 0,$
+
+$v_{11} + v_{7} z_{31} \geq 0,$
+
+$v_{11} + v_{3} y_{2} + v_{7} z_{32} \geq 0,$
+
+$v_{11} + v_{3} y_{3} + v_{7} z_{33} \geq 0,$
+
+$v_{11} + v_{3} + v_{7} z_{34} \geq 0,$
+
+$v_{12} \geq 0,$
+
+$v_{12} + v_{4} y_{2} + v_{8} z_{42} \geq 0,$
+
+$v_{12} + v_{4} y_{3} + v_{8} z_{43} \geq 0,$
+
+$v_{12} + v_{4} \geq 0,$
+
+$- v_{6} x_{2} - v_{7} x_{3} - v_{8} \geq 0,$
+
+$- v_{1} - v_{2} - v_{3} - v_{4} \geq 0,$
+
+$- v_{5} - v_{6} - v_{7} - v_{8} \geq 0,$
+
+$v_{6} x_{2} + v_{7} x_{3} + v_{8} \geq 0,$
+
+$v_{1} + v_{2} + v_{3} + v_{4} \geq 0,$
+
+$v_{5} + v_{6} + v_{7} + v_{8} \geq 0,$
+
+$u_{10} + u_{11} + u_{12} + u_{9} < 0,$
+
+$v_{10} + v_{11} + v_{12} + v_{9} < 0,$
 
 \end{document}
