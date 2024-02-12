@@ -5,6 +5,9 @@ import sympy
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from matplotlib.collections import PolyCollection
 from scipy.spatial import ConvexHull
+import gurobipy
+from gurobipy import GRB
+
 import sys
 
 
@@ -50,7 +53,8 @@ def create_lp(xy, z):
     delta = delta.value ; x_t = x_t.value ; z_t = z_t.value
     if x_t is not None:
         alpha = barycentric.value
-        print(alpha)
+        print("alpha", alpha)
+        print("alpha sums", alpha.sum(axis=0), alpha.sum(axis=1))
         alpha_z = z.T @ alpha
         convex_comb_z = np.diag(alpha_z)
         assert np.allclose(x @ alpha - x_t, 0)
@@ -74,7 +78,7 @@ def create_lp(xy, z):
         # that's just an awkward way to verify that alpha is nonnegative:
         big_C = np.zeros((16, 19))
         big_C[:16, :16] = - np.eye(16)
-        assert np.all(big_C @ big_x <= 0)
+        # assert np.all(big_C @ big_x <= 0)
 
     # all None if infeasible
     return x_t, z_t, delta
@@ -85,7 +89,8 @@ def create_lp(xy, z):
 # but with all-nonnegative variables, and an easier to dualize format.
 def create_lp_matrix(xy, z):
     x, y = xy[0, :], xy[1, :]
-    big_A = np.zeros((12, 22), dtype=z.dtype)
+    dtype = z.dtype if isinstance(z, np.ndarray) else object
+    big_A = np.zeros((12, 22), dtype=dtype)
     # 22 = 16 alphas + 3 positive part + 3 negative part.
     for j in range(4):
         big_A[j, j * 4: (j+1) * 4] = x
@@ -97,7 +102,7 @@ def create_lp_matrix(xy, z):
         big_A[j, -2] = 1 # x_t_m
         big_A[j + 4, -1] = 1 # z_t_m
         big_A[j + 8, j * 4: (j+1) * 4] = 1
-    big_b = np.zeros(12, dtype=z.dtype)
+    big_b = np.zeros(12, dtype=dtype)
     big_b[-4:] = 1
 
     return big_A, big_b
@@ -172,6 +177,22 @@ def test_create_primal_lp_via_matrix():
     print(x_t, z_t, delta)
 
 
+def verify(xy, z):
+    x_t, z_t, delta = create_lp(xy, z)
+    x_good = x_t is not None
+    xy_trans = xy[::-1, :]
+    z_trans = z.T
+    x_t_2, z_t_2, delta_2 = create_lp(xy_trans, z_trans)
+    y_good = x_t_2 is not None
+    is_counterexample = not x_good and not y_good
+    if is_counterexample:
+        print("COUNTEREXAMPLE")
+        print(repr(xy), repr(z))
+    return int(x_good) + int(y_good)
+
+
+# verify(xy, z) ; exit()
+
 # verify_farkas_lemma() ; exit()
 
 
@@ -190,7 +211,37 @@ def search_counterexample_via_combined_duals():
 # search_counterexample_via_combined_duals() ; exit()
 
 
-def create_symbolic_combined_duals():
+def create_symbolic_combined_duals(xy, z, u, v):
+    big_A, big_b = create_lp_matrix(xy, z)
+    xy_trans = xy[::-1, :]
+    z_trans = z.T
+    big_A_prime, big_b_prime = create_lp_matrix(xy_trans, z_trans)
+
+    '''
+    constraints =  [big_A.T @ u,
+                    big_A_prime.T @ v,
+                    - big_b @ u,
+                    - big_b_prime @ v
+    ]
+    '''
+
+    u = np.array([uu for uu in u])
+    v = np.array([vv for vv in v])
+
+    c_primal = np.array([row @ u for row in big_A.T])
+    c_dual = np.array([row @ v for row in big_A_prime.T])
+
+    constraints =  [c_primal, c_dual,
+                    - big_b @ u,
+                    - big_b_prime @ v
+    ]
+    return constraints
+
+
+def create_symbolic_combined_duals_sympy():
+    # we can't yet calculate it at this point, it's a chicken and e
+    dual_variable_num = 12
+
     x = sympy.symbols(list(f'x_{i+1}' for i in range(4)))
     y = sympy.symbols(list(f'y_{i+1}' for i in range(4)))
     x[0] = y[0] = 0
@@ -198,30 +249,86 @@ def create_symbolic_combined_duals():
     xy = np.array([x, y], dtype=object)
     z = np.array([[sympy.symbols(list(f'z_{i+1}{j+1}' for j in range(4)))] for i in range(4)], dtype=object)
     z = z.squeeze()
-    big_A, big_b = create_lp_matrix(xy, z)
-    xy_trans = xy[::-1, :]
-    z_trans = z.T
-    big_A_prime, big_b_prime = create_lp_matrix(xy_trans, z_trans)
 
-    big_y = np.array(sympy.symbols(list(f'u_{k+1}' for k in range(big_A.shape[0]))), dtype=object)
-    big_y_prime = np.array(sympy.symbols(list(f'v_{k+1}' for k in range(big_A.shape[0]))), dtype=object)
+    u = np.array(sympy.symbols(list(f'u_{k+1}' for k in range(dual_variable_num))), dtype=object)
+    v = np.array(sympy.symbols(list(f'v_{k+1}' for k in range(dual_variable_num))), dtype=object)
 
-    # if (x,y,z) is a counterexample, then
-    # there exists (u,v) such that
-    # all 4 is nonnegative, and the last two are strictly positive:
-    constraints =  [big_A.T @ big_y,
-                    big_A_prime.T @ big_y_prime,
-                    - big_b @ big_y,
-                    - big_b_prime @ big_y_prime
-    ]
-    return constraints, z
+    constraints = create_symbolic_combined_duals(xy, z, u, v)
+
+    return constraints
 
 
 def subs_saddle(constraint, z):
     return constraint.subs(z[0, 0], 0).subs(z[-1, -1], 0).subs(z[0, -1], 1).subs(z[-1, 0], 0)
 
+
+def combined_dual_to_gurobi():
+    m = gurobipy.Model("combined_dual")
+    m.setParam('NonConvex', 2)
+    m.setParam('Seed', 43)
+
+    x = m.addMVar(2, vtype=GRB.CONTINUOUS, lb=0, ub=1, name="x")
+    y = m.addMVar(2, vtype=GRB.CONTINUOUS, lb=0, ub=1, name="y")
+    xy = np.zeros((2, 4), dtype=object)
+    xy[0, 1:3] = np.array([xx for xx in x])
+    xy[1, 1:3] = np.array([yy for yy in y])
+    xy[:, 3] = 1
+
+    z = m.addMVar((4, 4), vtype=GRB.CONTINUOUS, lb=-GRB.INFINITY, name="z")
+
+    u = m.addMVar(12, vtype=GRB.CONTINUOUS, lb=-GRB.INFINITY, name="u")
+    v = m.addMVar(12, vtype=GRB.CONTINUOUS, lb=-GRB.INFINITY, name="v")
+
+    constraints = create_symbolic_combined_duals(xy, z, u, v)
+
+    slack = m.addVar(vtype=GRB.CONTINUOUS, lb=-GRB.INFINITY, name="slack")
+
+    nonnegativity_constraints = constraints[0].tolist() + constraints[1].tolist()
+    negativity_constraints = [ - constraints[2], - constraints[3] ]
+
+    m.addConstr(z[0, 0] == 0)
+    m.addConstr(z[3, 3] == 0)
+    m.addConstr(z[0, 3] == 1)
+    m.addConstr(z[3, 0] == 1)
+
+    for constraint in nonnegativity_constraints:
+        m.addConstr(constraint >= 0)
+    
+    for constraint in negativity_constraints:
+        m.addConstr(constraint <= slack)
+
+    # we only care about negative solutions, how much negative does not matter.
+    # gurobi settles on optimality faster if we accept not-so-good solutions.
+    m.addConstr(slack <= -3e-6)
+    # m.addConstr(slack >= -1e-5)
+
+    m.setObjective(0, GRB.MINIMIZE)
+
+    m.optimize()
+    if m.status == GRB.OPTIMAL:
+        print("slack", slack.X)
+    else:
+        print("could not solve")
+        return
+
+    x = x.X
+    y = y.X
+    z = z.X
+    xy = np.zeros((2, 4))
+    xy[0, 1:3] = np.array([xx for xx in x])
+    xy[1, 1:3] = np.array([yy for yy in y])
+    xy[:, 3] = 1
+    print(repr(xy))
+    print(repr(z))
+    solvable = verify(xy, z)
+    print("solvable", solvable)
+
+
+combined_dual_to_gurobi() ; exit()
+
+
 def dump_combined_dual():
-    constraints, z = create_symbolic_combined_duals()
+    constraints = create_symbolic_combined_duals_sympy()
     nonnegativity_constraints = constraints[0].tolist() + constraints[1].tolist()
     negativity_constraints = [ - constraints[2], - constraints[3] ]
     print("""\\documentclass{article}
@@ -291,20 +398,6 @@ def vis_solution_2d(ax, xy, z, x_t, z_t, delta):
     plt.axhline(0, color='black')
     plt.axvline(0, color='black')
 
-
-
-def verify(xy, z):
-    x_t, z_t, delta = create_lp(xy, z)
-    x_good = x_t is not None
-    xy_trans = xy[::-1, :]
-    z_trans = z.T
-    x_t_2, z_t_2, delta_2 = create_lp(xy_trans, z_trans)
-    y_good = x_t_2 is not None
-    is_counterexample = not x_good and not y_good
-    if is_counterexample:
-        print("COUNTEREXAMPLE")
-        print(repr(xy), repr(z))
-    return int(x_good) + int(y_good)
 
 
 def update(xy, z):
