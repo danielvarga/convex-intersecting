@@ -265,7 +265,7 @@ def subs_saddle(constraint, z):
 def combined_dual_to_gurobi():
     m = gurobipy.Model("combined_dual")
     m.setParam('NonConvex', 2)
-    m.setParam('Seed', 43)
+    m.setParam('Seed', 44)
 
     x = m.addMVar(2, vtype=GRB.CONTINUOUS, lb=0, ub=1, name="x")
     y = m.addMVar(2, vtype=GRB.CONTINUOUS, lb=0, ub=1, name="y")
@@ -274,7 +274,8 @@ def combined_dual_to_gurobi():
     xy[1, 1:3] = np.array([yy for yy in y])
     xy[:, 3] = 1
 
-    z = m.addMVar((4, 4), vtype=GRB.CONTINUOUS, lb=-GRB.INFINITY, name="z")
+    # z = m.addMVar((4, 4), vtype=GRB.CONTINUOUS, lb=-GRB.INFINITY, name="z")
+    z = m.addMVar((4, 4), vtype=GRB.CONTINUOUS, lb=-2, ub=+2, name="z")
 
     u = m.addMVar(12, vtype=GRB.CONTINUOUS, lb=-GRB.INFINITY, name="u")
     v = m.addMVar(12, vtype=GRB.CONTINUOUS, lb=-GRB.INFINITY, name="v")
@@ -299,10 +300,9 @@ def combined_dual_to_gurobi():
 
     # we only care about negative solutions, how much negative does not matter.
     # gurobi settles on optimality faster if we accept not-so-good solutions.
-    m.addConstr(slack <= -3e-6)
-    # m.addConstr(slack >= -1e-5)
+    m.addConstr(slack >= -0.01)
 
-    m.setObjective(0, GRB.MINIMIZE)
+    m.setObjective(slack, GRB.MINIMIZE)
 
     m.optimize()
     if m.status == GRB.OPTIMAL:
@@ -322,6 +322,12 @@ def combined_dual_to_gurobi():
     print(repr(z))
     solvable = verify(xy, z)
     print("solvable", solvable)
+    slack, big_y, big_y_prime = create_combined_duals_lp_matrix(xy, z)
+    print("dual slack", slack)
+    if not np.isclose(slack, 0):
+        print("COUNTEREXAMPLE")
+        print(xy, z)
+        exit()
 
 
 combined_dual_to_gurobi() ; exit()
