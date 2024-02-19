@@ -141,7 +141,10 @@ def create_dual_lp_via_matrix(xy, z):
 def verify_farkas_lemma():
     for _ in range(1000):
         xy, z = create_config()
-        x_t, z_t, delta = create_primal_lp_via_matrix(xy, z)
+        x_t, z_t, delta = create_lp(xy, z)
+        x_t_prime, z_t_prime, delta_prime = create_primal_lp_via_matrix(xy, z)
+        assert (x_t is not None) == (x_t_prime is not None)
+
         dual_objective_value, big_y = create_dual_lp_via_matrix(xy, z)
         primal_solvable = x_t is not None
         dual_solvable = dual_objective_value is not None and dual_objective_value < 0 and not np.isclose(dual_objective_value, 0)
@@ -239,7 +242,7 @@ def create_symbolic_combined_duals(xy, z, u, v):
 
 
 def create_symbolic_combined_duals_sympy():
-    # we can't yet calculate it at this point, it's a chicken and e
+    # we can't yet calculate dual_variable_num at this point, it's a chicken and egg problem
     dual_variable_num = 12
 
     x = sympy.symbols(list(f'x_{i+1}' for i in range(4)))
@@ -258,6 +261,58 @@ def create_symbolic_combined_duals_sympy():
     return constraints
 
 
+def vis_solution(ax, xy, z, x_t, z_t, delta, transpose=False):
+    x, y = xy[0, :], xy[1, :]
+    facecolors = "blue" if transpose else "cyan"
+    for j in range(4):
+        y_j = y[j]
+        z_j = z[:, j]
+        xz_j = np.stack([x, z_j], axis=-1)
+        xyz_j = np.stack([x, y_j * np.ones(4), z_j], axis=-1)
+        if transpose:
+            xyz_j = xyz_j[:, [1, 0, 2]]
+        ax.add_collection3d(Poly3DCollection([xyz_j], facecolors=facecolors, linewidths=1, edgecolors='b', alpha=.25))
+
+    if x_t is not None:
+        y_a = -1
+        y_b = 2
+        verts = np.array([[x_t, y_a, z_t + y_a * delta], [x_t, y_b, z_t + y_b * delta]])
+        if transpose:
+            verts = verts[:, [1, 0, 2]]
+        ax.add_collection3d(Poly3DCollection([verts], facecolors='cyan', linewidths=3, edgecolors='r', alpha=.25))
+
+
+def vis_solution_combined(ax, xy, z):
+    x_t, z_t, delta = create_lp(xy, z)
+
+    vis_solution(ax, xy, z, x_t, z_t, delta)
+
+    xy_trans = xy[::-1, :]
+    z_trans = z.T
+    x_t_2, z_t_2, delta_2 = create_lp(xy_trans, z_trans)
+    vis_solution(ax, xy_trans, z_trans, x_t_2, z_t_2, delta_2, transpose=True)
+
+
+def vis_solution_2d(ax, xy, z, x_t, z_t, delta):
+    assert x_t is not None, "no solution, cannot visualize it"
+    x, y = xy[0, :], xy[1, :]
+    points = np.array([[[x[i], y[j], z[i][j]] for j in range(4)] for i in range(4)])
+    projected_x = points[:, :, 0] - x_t
+    projected_y = points[:, :, 1] # not really part of the projection to xz, but kept around.
+    projected_z = points[:, :, 2] - delta * points[:, :, 1] - z_t
+    projected = np.stack([projected_x, projected_y, projected_z], axis=-1)
+    colors = ['red', 'green', 'blue', 'yellow']
+    for j, color in enumerate(colors):
+        xyz_j = projected[:, j, :]
+        xz_j = xyz_j[:, [0, 2]]
+        points = xz_j
+        hull = ConvexHull(points)
+        ax.fill(points[hull.vertices, 0], points[hull.vertices, 1], 'darkblue', edgecolor=color, alpha=0.3)  # Fill the convex hull with a transparent color
+
+    plt.axhline(0, color='black')
+    plt.axvline(0, color='black')
+
+
 def subs_saddle(constraint, z):
     return constraint.subs(z[0, 0], 0).subs(z[-1, -1], 0).subs(z[0, -1], 1).subs(z[-1, 0], 0)
 
@@ -266,6 +321,7 @@ def combined_dual_to_gurobi():
     m = gurobipy.Model("combined_dual")
     m.setParam('NonConvex', 2)
     m.setParam('Seed', 44)
+    m.setParam('FeasibilityTol', 1e-9)
 
     x = m.addMVar(2, vtype=GRB.CONTINUOUS, lb=0, ub=1, name="x")
     y = m.addMVar(2, vtype=GRB.CONTINUOUS, lb=0, ub=1, name="y")
@@ -302,6 +358,15 @@ def combined_dual_to_gurobi():
     # gurobi settles on optimality faster if we accept not-so-good solutions.
     m.addConstr(slack >= -0.01)
 
+    epsilon = 0.0
+    m.addConstr(x[0] >= epsilon)
+    m.addConstr(x[1] <= 1 - epsilon)
+    m.addConstr(x[0] + epsilon <= x[1])
+
+    m.addConstr(y[0] >= epsilon)
+    m.addConstr(y[1] <= 1 - epsilon)
+    m.addConstr(y[0] + epsilon <= y[1])
+
     m.setObjective(slack, GRB.MINIMIZE)
 
     m.optimize()
@@ -324,6 +389,12 @@ def combined_dual_to_gurobi():
     print("solvable", solvable)
     slack, big_y, big_y_prime = create_combined_duals_lp_matrix(xy, z)
     print("dual slack", slack)
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    vis_solution_combined(ax, xy, z)
+    plt.show()
+
     if not np.isclose(slack, 0):
         print("COUNTEREXAMPLE")
         print(xy, z)
@@ -362,47 +433,6 @@ def dump_combined_dual():
 dump_combined_dual() ; exit()
 
 create_symbolic_combined_duals() ; exit()
-
-
-def vis_solution(ax, xy, z, x_t, z_t, delta, transpose=False):
-    x, y = xy[0, :], xy[1, :]
-    facecolors = "blue" if transpose else "cyan"
-    for j in range(4):
-        y_j = y[j]
-        z_j = z[:, j]
-        xz_j = np.stack([x, z_j], axis=-1)
-        xyz_j = np.stack([x, y_j * np.ones(4), z_j], axis=-1)
-        if transpose:
-            xyz_j = xyz_j[:, [1, 0, 2]]
-        ax.add_collection3d(Poly3DCollection([xyz_j], facecolors=facecolors, linewidths=1, edgecolors='b', alpha=.25))
-
-    if x_t is not None:
-        y_a = -1
-        y_b = 2
-        verts = np.array([[x_t, y_a, z_t + y_a * delta], [x_t, y_b, z_t + y_b * delta]])
-        if transpose:
-            verts = verts[:, [1, 0, 2]]
-        ax.add_collection3d(Poly3DCollection([verts], facecolors='cyan', linewidths=3, edgecolors='r', alpha=.25))
-
-
-def vis_solution_2d(ax, xy, z, x_t, z_t, delta):
-    assert x_t is not None, "no solution, cannot visualize it"
-    x, y = xy[0, :], xy[1, :]
-    points = np.array([[[x[i], y[j], z[i][j]] for j in range(4)] for i in range(4)])
-    projected_x = points[:, :, 0] - x_t
-    projected_y = points[:, :, 1] # not really part of the projection to xz, but kept around.
-    projected_z = points[:, :, 2] - delta * points[:, :, 1] - z_t
-    projected = np.stack([projected_x, projected_y, projected_z], axis=-1)
-    colors = ['red', 'green', 'blue', 'yellow']
-    for j, color in enumerate(colors):
-        xyz_j = projected[:, j, :]
-        xz_j = xyz_j[:, [0, 2]]
-        points = xz_j
-        hull = ConvexHull(points)
-        ax.fill(points[hull.vertices, 0], points[hull.vertices, 1], 'darkblue', edgecolor=color, alpha=0.3)  # Fill the convex hull with a transparent color
-
-    plt.axhline(0, color='black')
-    plt.axvline(0, color='black')
 
 
 
