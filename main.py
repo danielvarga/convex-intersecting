@@ -247,18 +247,20 @@ def create_symbolic_combined_duals_sympy():
 
     x = sympy.symbols(list(f'x_{i+1}' for i in range(4)))
     y = sympy.symbols(list(f'y_{i+1}' for i in range(4)))
-    x[0] = y[0] = 0
-    x[3] = y[3] = 1
+    # x[0] = y[0] = 0
+    # x[3] = y[3] = 1
     xy = np.array([x, y], dtype=object)
     z = np.array([[sympy.symbols(list(f'z_{i+1}{j+1}' for j in range(4)))] for i in range(4)], dtype=object)
     z = z.squeeze()
 
-    u = np.array(sympy.symbols(list(f'u_{k+1}' for k in range(dual_variable_num))), dtype=object)
-    v = np.array(sympy.symbols(list(f'v_{k+1}' for k in range(dual_variable_num))), dtype=object)
+    # u = np.array(sympy.symbols(list(f'u_{k+1}' for k in range(dual_variable_num))), dtype=object)
+    # v = np.array(sympy.symbols(list(f'v_{k+1}' for k in range(dual_variable_num))), dtype=object)
+    u = np.array([[sympy.symbols(list(f'u_{i+1}{j+1}' for j in range(4)))] for i in range(3)], dtype=object).flatten()
+    v = np.array([[sympy.symbols(list(f'v_{i+1}{j+1}' for j in range(4)))] for i in range(3)], dtype=object).flatten()
 
     constraints = create_symbolic_combined_duals(xy, z, u, v)
 
-    return constraints
+    return xy, z, constraints
 
 
 def vis_solution(ax, xy, z, x_t, z_t, delta, transpose=False):
@@ -401,30 +403,47 @@ def combined_dual_to_gurobi():
         exit()
 
 
-combined_dual_to_gurobi() ; exit()
+# combined_dual_to_gurobi() ; exit()
 
 
 def dump_combined_dual():
-    constraints = create_symbolic_combined_duals_sympy()
+    xy, z, constraints = create_symbolic_combined_duals_sympy()
+
+    equality_constraints = []
+    for block in (0, 1):
+        constraint_block = constraints[block]
+        for line in (-1, -2, -3):
+            if constraint_block[line] + constraint_block[line-3] == 0:
+                print("equality identified", constraint_block[line], file=sys.stderr)
+                equality_constraints.append(constraint_block[line])
+    assert len(equality_constraints) == 6
+    constraints[0] = constraints[0][:-6]
+    constraints[1] = constraints[1][:-6]
+
+    equality_constraints = np.array(equality_constraints, dtype=object)
+    equality_constraints = equality_constraints[[1, 4, 0, 3, 2, 5]]
+
     nonnegativity_constraints = constraints[0].tolist() + constraints[1].tolist()
     negativity_constraints = [ - constraints[2], - constraints[3] ]
     print("""\\documentclass{article}
 \\usepackage[margin=1in]{geometry}
+\\usepackage{amsfonts}
 \\begin{document}
 """)
 
-    print("$\\exists x_2, x_3, y_2, y_3, z_{11},\dots,z_{44},$")
-    print("$\\exists u_1,\\dots, u_{12}, v_1,\dots,v_{12}:$")
+    print("$\\exists x, y \in \mathbb{R}^{4}, \\exists Z \in \mathbb{R}^{4 \\times 4},$")
+    print("$\\exists U, V \in \mathbb{R}^{3 \\times 4}:$")
     print()
-    print("$0 \\leq x_2 \\leq x_3 \\leq 1,$")
-    print()
-    print("$0 \\leq y_2 \\leq y_3 \\leq 1,$")
-    print()
+
     for constraint in nonnegativity_constraints:
-        print("$" + sympy.latex(subs_saddle(constraint, z)) + " \\geq 0,$")
+        print("$" + sympy.latex(constraint) + " \\geq 0,$")
+        # print("$" + sympy.latex(subs_saddle(constraint, z)) + " \\geq 0,$")
+        print()
+    for constraint in equality_constraints:
+        print("$" + sympy.latex(constraint) + " = 0,$")
         print()
     for constraint in negativity_constraints:
-        print("$" + sympy.latex(constraint) + " < 0,$")
+        print("$" + sympy.latex(constraint) + " = -1,$")
         print()
 
     print("\\end{document}")
