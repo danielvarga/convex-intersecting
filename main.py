@@ -11,8 +11,11 @@ from gurobipy import GRB
 import sys
 
 
+n = 4
+
+
 def create_stripe():
-    return np.array([0] + sorted(np.random.uniform(size=2)) + [1])
+    return np.array([0] + sorted(np.random.uniform(size=n - 2)) + [1])
 
 
 def create_config():
@@ -21,23 +24,23 @@ def create_config():
 
     xy = np.stack([x, y], axis=0)
     R = 2
-    z = np.random.uniform(size=(4, 4), low=-R, high=R)
+    z = np.random.uniform(size=(n, n), low=-R, high=R)
 
     # z = np.sin(x[None, :] + y[:, None])
 
-    z[0, 0] = z[3, 3] = 0
-    z[0, 3] = z[3, 0] = 1
+    z[0, 0] = z[n - 1, n - 1] = 0
+    z[0, n - 1] = z[n - 1, 0] = 1
     return xy, z
 
 
 def create_lp(xy, z):
     x, y = xy[0, :], xy[1, :]
-    barycentric = cp.Variable((4, 4), "barycentric")
+    barycentric = cp.Variable((n, n), "barycentric")
     delta = cp.Variable()
     x_t = cp.Variable(name="x_t")
     z_t = cp.Variable(name="z_t")
     constraints = [barycentric >= 0]
-    for j in range(4):
+    for j in range(n):
         y_j = y[j]
         z_j = z[:, j]
         xz_j = np.stack([x, z_j], axis=-1)
@@ -51,6 +54,9 @@ def create_lp(xy, z):
     # print("minimal barycentric", lp.value)
 
     delta = delta.value ; x_t = x_t.value ; z_t = z_t.value
+    print("the verification part has not been ported 4->n")
+    return x_t, z_t, delta
+
     if x_t is not None:
         alpha = barycentric.value
         print("alpha", alpha)
@@ -88,6 +94,7 @@ def create_lp(xy, z):
 # this is supposed to do the same as create_lp(xy, z),
 # but with all-nonnegative variables, and an easier to dualize format.
 def create_lp_matrix(xy, z):
+    assert n == 4, "not yet ported 4->n"
     x, y = xy[0, :], xy[1, :]
     dtype = z.dtype if isinstance(z, np.ndarray) else object
     big_A = np.zeros((12, 22), dtype=dtype)
@@ -114,6 +121,7 @@ def create_lp_matrix(xy, z):
 
 # should be functionally completely identical to create_lp(xy, z)
 def create_primal_lp_via_matrix(xy, z):
+    assert n == 4, "not yet ported 4->n"
     big_A, big_b = create_lp_matrix(xy, z)
     big_x = cp.Variable(22, name="big_x")
     constraints = [big_x >= 0, big_A @ big_x == big_b]
@@ -130,6 +138,7 @@ def create_primal_lp_via_matrix(xy, z):
 
 
 def create_dual_lp_via_matrix(xy, z):
+    assert n == 4, "not yet ported 4->n"
     big_A, big_b = create_lp_matrix(xy, z)
     big_y = cp.Variable(12, name="big_y")
     constraints = [big_A.T @ big_y >= 0, cp.norm(big_y, 1) <= 1]
@@ -156,8 +165,8 @@ def create_combined_duals_lp_matrix(xy, z):
     xy_trans = xy[::-1, :]
     z_trans = z.T
     big_A_prime, big_b_prime = create_lp_matrix(xy_trans, z_trans)
-    big_y = cp.Variable(12, name="big_y")
-    big_y_prime = cp.Variable(12, name="big_y_prime")
+    big_y = cp.Variable(3 * n, name="big_y")
+    big_y_prime = cp.Variable(3 * n, name="big_y_prime")
     slack = cp.Variable(name="slack")
     constraints =  [big_A.T @ big_y >= 0,
                     cp.norm(big_y, 1) <= 1,
@@ -242,21 +251,14 @@ def create_symbolic_combined_duals(xy, z, u, v):
 
 
 def create_symbolic_combined_duals_sympy():
-    # we can't yet calculate dual_variable_num at this point, it's a chicken and egg problem
-    dual_variable_num = 12
-
     x = sympy.symbols(list(f'x_{i+1}' for i in range(4)))
     y = sympy.symbols(list(f'y_{i+1}' for i in range(4)))
-    # x[0] = y[0] = 0
-    # x[3] = y[3] = 1
     xy = np.array([x, y], dtype=object)
     z = np.array([[sympy.symbols(list(f'z_{i+1}{j+1}' for j in range(4)))] for i in range(4)], dtype=object)
     z = z.squeeze()
 
-    # u = np.array(sympy.symbols(list(f'u_{k+1}' for k in range(dual_variable_num))), dtype=object)
-    # v = np.array(sympy.symbols(list(f'v_{k+1}' for k in range(dual_variable_num))), dtype=object)
-    u = np.array([[sympy.symbols(list(f'u_{i+1}{j+1}' for j in range(4)))] for i in range(3)], dtype=object).flatten()
-    v = np.array([[sympy.symbols(list(f'v_{i+1}{j+1}' for j in range(4)))] for i in range(3)], dtype=object).flatten()
+    u = np.array([[sympy.symbols(list(f'u_{i+1}{j+1}' for j in range(n)))] for i in range(3)], dtype=object).flatten()
+    v = np.array([[sympy.symbols(list(f'v_{i+1}{j+1}' for j in range(n)))] for i in range(3)], dtype=object).flatten()
 
     constraints = create_symbolic_combined_duals(xy, z, u, v)
 
@@ -266,11 +268,11 @@ def create_symbolic_combined_duals_sympy():
 def vis_solution(ax, xy, z, x_t, z_t, delta, transpose=False):
     x, y = xy[0, :], xy[1, :]
     facecolors = "blue" if transpose else "cyan"
-    for j in range(4):
+    for j in range(n):
         y_j = y[j]
         z_j = z[:, j]
         xz_j = np.stack([x, z_j], axis=-1)
-        xyz_j = np.stack([x, y_j * np.ones(4), z_j], axis=-1)
+        xyz_j = np.stack([x, y_j * np.ones(n), z_j], axis=-1)
         if transpose:
             xyz_j = xyz_j[:, [1, 0, 2]]
         ax.add_collection3d(Poly3DCollection([xyz_j], facecolors=facecolors, linewidths=1, edgecolors='b', alpha=.25))
@@ -298,7 +300,7 @@ def vis_solution_combined(ax, xy, z):
 def vis_solution_2d(ax, xy, z, x_t, z_t, delta):
     assert x_t is not None, "no solution, cannot visualize it"
     x, y = xy[0, :], xy[1, :]
-    points = np.array([[[x[i], y[j], z[i][j]] for j in range(4)] for i in range(4)])
+    points = np.array([[[x[i], y[j], z[i][j]] for j in range(n)] for i in range(n)])
     projected_x = points[:, :, 0] - x_t
     projected_y = points[:, :, 1] # not really part of the projection to xz, but kept around.
     projected_z = points[:, :, 2] - delta * points[:, :, 1] - z_t
@@ -315,6 +317,17 @@ def vis_solution_2d(ax, xy, z, x_t, z_t, delta):
     plt.axvline(0, color='black')
 
 
+
+def mini_main():
+    xy = np.stack([np.linspace(0, 1, n), np.linspace(0, 1, n)], axis=0)
+    np.random.seed(3)
+    z = np.random.uniform(size=(n, n))
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    vis_solution_combined(ax, xy, z)
+    plt.show()
+
+
 def subs_saddle(constraint, z):
     return constraint.subs(z[0, 0], 0).subs(z[-1, -1], 0).subs(z[0, -1], 1).subs(z[-1, 0], 0)
 
@@ -325,18 +338,17 @@ def combined_dual_to_gurobi():
     m.setParam('Seed', 44)
     m.setParam('FeasibilityTol', 1e-9)
 
-    x = m.addMVar(2, vtype=GRB.CONTINUOUS, lb=0, ub=1, name="x")
-    y = m.addMVar(2, vtype=GRB.CONTINUOUS, lb=0, ub=1, name="y")
-    xy = np.zeros((2, 4), dtype=object)
-    xy[0, 1:3] = np.array([xx for xx in x])
-    xy[1, 1:3] = np.array([yy for yy in y])
-    xy[:, 3] = 1
+    x = m.addMVar(n - 2, vtype=GRB.CONTINUOUS, lb=0, ub=1, name="x")
+    y = m.addMVar(n - 2, vtype=GRB.CONTINUOUS, lb=0, ub=1, name="y")
+    xy = np.zeros((2, n), dtype=object)
+    xy[0, 1: n-1] = np.array([xx for xx in x])
+    xy[1, 1: n-1] = np.array([yy for yy in y])
+    xy[:, n-1] = 1
 
-    # z = m.addMVar((4, 4), vtype=GRB.CONTINUOUS, lb=-GRB.INFINITY, name="z")
-    z = m.addMVar((4, 4), vtype=GRB.CONTINUOUS, lb=-2, ub=+2, name="z")
+    z = m.addMVar((n, n), vtype=GRB.CONTINUOUS, lb=-2, ub=+2, name="z")
 
-    u = m.addMVar(12, vtype=GRB.CONTINUOUS, lb=-GRB.INFINITY, name="u")
-    v = m.addMVar(12, vtype=GRB.CONTINUOUS, lb=-GRB.INFINITY, name="v")
+    u = m.addMVar(3 * n, vtype=GRB.CONTINUOUS, lb=-GRB.INFINITY, name="u")
+    v = m.addMVar(3 * n, vtype=GRB.CONTINUOUS, lb=-GRB.INFINITY, name="v")
 
     constraints = create_symbolic_combined_duals(xy, z, u, v)
 
@@ -346,9 +358,9 @@ def combined_dual_to_gurobi():
     negativity_constraints = [ - constraints[2], - constraints[3] ]
 
     m.addConstr(z[0, 0] == 0)
-    m.addConstr(z[3, 3] == 0)
-    m.addConstr(z[0, 3] == 1)
-    m.addConstr(z[3, 0] == 1)
+    m.addConstr(z[n-1, n-1] == 0)
+    m.addConstr(z[0, n-1] == 1)
+    m.addConstr(z[n-1, 0] == 1)
 
     for constraint in nonnegativity_constraints:
         m.addConstr(constraint >= 0)
@@ -360,7 +372,7 @@ def combined_dual_to_gurobi():
     # gurobi settles on optimality faster if we accept not-so-good solutions.
     m.addConstr(slack >= -0.01)
 
-    epsilon = 0.0
+    epsilon = 0
     m.addConstr(x[0] >= epsilon)
     m.addConstr(x[1] <= 1 - epsilon)
     m.addConstr(x[0] + epsilon <= x[1])
